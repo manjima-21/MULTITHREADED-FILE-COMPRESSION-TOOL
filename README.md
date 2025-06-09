@@ -51,4 +51,8 @@ Future enhancements to the tool could include:
 2. Improved Error Handling: Implementing robust error handling mechanisms would improve the tool's reliability and robustness.
 3. Graphical User Interface: Developing a graphical user interface would make the tool more user-friendly and accessible to a wider range of users.
 
-   
+*OUTPUT*
+
+![Image](https://github.com/user-attachments/assets/6c15cf7c-3d36-4aae-9008-785c5cc74e12)
+
+
