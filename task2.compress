@@ -7,7 +7,7 @@
 #include <chrono>
 using namespace std;
 mutex mtx;
-ofstream logFile("error.log"); // will store errors here
+ofstream logFile("error.log"); 
 vector<uint8_t> readFile(const string& filename) {
     ifstream in(filename, ios::binary);
     if (!in) {
@@ -38,7 +38,7 @@ void compressPart(const vector<uint8_t>& input, vector<uint8_t>& output, int tid
     } else {
         cout << "Thread " << tid << " compressed " << input.size() << " bytes" << endl;
     }
-    output.resize(outSize); // adjust final size
+    output.resize(outSize); 
 }
 void decompressAll(const vector<uint8_t>& input, vector<uint8_t>& output, uLongf origSize) {
     output.resize(origSize);
