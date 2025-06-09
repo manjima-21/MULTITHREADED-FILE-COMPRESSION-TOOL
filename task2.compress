@@ -1,0 +1,106 @@
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <thread>
+#include <mutex>
+#include <zlib.h>
+#include <chrono>
+using namespace std;
+mutex mtx;
+ofstream logFile("error.log"); // will store errors here
+vector<uint8_t> readFile(const string& filename) {
+    ifstream in(filename, ios::binary);
+    if (!in) {
+        cerr << "Couldn't open file: " << filename << endl;
+        logFile << "Couldn't open: " << filename << endl;
+        return {};
+    }
+    return vector<uint8_t>((istreambuf_iterator<char>(in)), {});
+}
+void writeFile(const string& filename, const vector<uint8_t>& data) {
+    ofstream out(filename, ios::binary);
+    if (!out) {
+        cerr << "Couldn't write file: " << filename << endl;
+        logFile << "Couldn't write: " << filename << endl;
+        return;
+    }
+    out.write((const char*)data.data(), data.size());
+}
+void compressPart(const vector<uint8_t>& input, vector<uint8_t>& output, int tid) {
+    uLongf outSize = compressBound(input.size());
+    output.resize(outSize);
+    int res = compress(output.data(), &outSize, input.data(), input.size());
+
+    lock_guard<mutex> lock(mtx);
+    if (res != Z_OK) {
+        cerr << "Thread " << tid << " compression failed" << endl;
+        logFile << "Thread " << tid << " compression failed" << endl;
+    } else {
+        cout << "Thread " << tid << " compressed " << input.size() << " bytes" << endl;
+    }
+    output.resize(outSize); // adjust final size
+}
+void decompressAll(const vector<uint8_t>& input, vector<uint8_t>& output, uLongf origSize) {
+    output.resize(origSize);
+    int res = uncompress(output.data(), &origSize, input.data(), input.size());
+    if (res != Z_OK) {
+        cerr << "Decompression failed" << endl;
+        logFile << "Decompression failed" << endl;
+    }
+}
+int main() {
+    string inFile, outCompressed = "compressed.bin", outDecompressed = "decompressed.txt";
+    cout << "Enter file to compress: ";
+    cin >> inFile;
+
+    vector<uint8_t> inputData = readFile(inFile);
+    if (inputData.empty()) return 1;
+
+    size_t numThreads = 4;
+    size_t chunkSize = inputData.size() / numThreads;
+    vector<thread> threads;
+    vector<vector<uint8_t>> compChunks(numThreads);
+
+    auto start = chrono::high_resolution_clock::now();
+
+    for (size_t i = 0; i < numThreads; ++i) {
+        size_t from = i * chunkSize;
+        size_t to = (i == numThreads - 1) ? inputData.size() : from + chunkSize;
+
+       
+        vector<uint8_t> part(inputData.begin() + from, inputData.begin() + to);
+
+        threads.emplace_back(compressPart, part, ref(compChunks[i]), i);
+    }
+
+    for (auto& t : threads) t.join();
+
+    
+    vector<uint8_t> allCompressed;
+    for (auto& c : compChunks)
+        allCompressed.insert(allCompressed.end(), c.begin(), c.end());
+
+    auto end = chrono::high_resolution_clock::now();
+    double timeComp = chrono::duration_cast<chrono::milliseconds>(end - start).count();
+
+    writeFile(outCompressed, allCompressed);
+    cout << "\nCompressed in " << timeComp << " ms" << endl;
+    cout << "Original: " << inputData.size() << " bytes" << endl;
+    cout << "Compressed: " << allCompressed.size() << " bytes" << endl;
+    cout << "Ratio: " << (100.0 * allCompressed.size() / inputData.size()) << "%" << endl;
+
+    
+    auto dstart = chrono::high_resolution_clock::now();
+    vector<uint8_t> reloaded = readFile(outCompressed);
+    vector<uint8_t> decompressed;
+    decompressAll(reloaded, decompressed, inputData.size());
+    auto dend = chrono::high_resolution_clock::now();
+    double timeDecomp = chrono::duration_cast<chrono::milliseconds>(dend - dstart).count();
+
+    writeFile(outDecompressed, decompressed);
+    cout << "Decompressed in " << timeDecomp << " ms" << endl;
+    cout << "Output saved to: " << outDecompressed << endl;
+
+    logFile.close();
+    return 0;
+}
